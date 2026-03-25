@@ -4,17 +4,25 @@
 """
 
 import logging
+from typing import Annotated
 
-from fastapi import APIRouter, HTTPException, Query, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlmodel import select
 
 from ..core.db import SessionDep
-from ..core.models import Alert
+from ..core.models import Alert, User
+from ..dependencies import get_current_active_user
 
 logger = logging.getLogger(__name__)
-router = APIRouter(prefix="/alerts", tags=["alerts"])
+router = APIRouter(
+    prefix="/alerts",
+    tags=["alerts"],
+    dependencies=[Depends(get_current_active_user)],
+)
 
 ALERT_NOT_FOUND = "预警信息不存在"
+
+CurrentUser = Annotated[User, Depends(get_current_active_user)]
 
 
 def _apply_alert_update(alert: Alert, alert_update: Alert, exclude_unset: bool) -> None:
@@ -31,12 +39,17 @@ def _apply_alert_update(alert: Alert, alert_update: Alert, exclude_unset: bool) 
 
 
 @router.post("/", response_model=Alert, status_code=status.HTTP_201_CREATED)
-def create_alert(alert: Alert, session: SessionDep) -> Alert:
+def create_alert(
+    alert: Alert,
+    session: SessionDep,
+    current_user: CurrentUser,
+) -> Alert:
     """创建新的预警信息。
 
     Args:
         alert: 预警信息数据
         session: 数据库会话依赖
+        current_user: 当前认证用户
 
     Returns:
         创建的预警信息对象
@@ -44,13 +57,14 @@ def create_alert(alert: Alert, session: SessionDep) -> Alert:
     session.add(alert)
     session.commit()
     session.refresh(alert)
-    logger.info(f"Created alert: {alert!r}")
+    logger.info(f"User {current_user.username} created alert: {alert!r}")
     return alert
 
 
 @router.get("/", response_model=list[Alert])
 def read_alerts(
     session: SessionDep,
+    current_user: CurrentUser,
     offset: int = 0,
     limit: int = Query(default=100, le=100),
 ) -> list[Alert]:
@@ -58,23 +72,30 @@ def read_alerts(
 
     Args:
         session: 数据库会话依赖
+        current_user: 当前认证用户
         offset: 分页偏移量
         limit: 每页数量，最大100
 
     Returns:
         预警信息列表
     """
-    alerts = session.exec(select(Alert)).offset(offset).limit(limit).all()
+    statement = select(Alert).offset(offset).limit(limit)
+    alerts = session.exec(statement).all()
     return list(alerts)
 
 
 @router.get("/{alert_id}", response_model=Alert)
-def read_alert(alert_id: int, session: SessionDep) -> Alert:
+def read_alert(
+    alert_id: int,
+    session: SessionDep,
+    current_user: CurrentUser,
+) -> Alert:
     """获取单个预警信息。
 
     Args:
         alert_id: 预警信息ID
         session: 数据库会话依赖
+        current_user: 当前认证用户
 
     Returns:
         预警信息对象
@@ -94,6 +115,7 @@ def update_alert(
     alert_id: int,
     alert_update: Alert,
     session: SessionDep,
+    current_user: CurrentUser,
 ) -> Alert:
     """完全更新预警信息。
 
@@ -101,6 +123,7 @@ def update_alert(
         alert_id: 预警信息ID
         alert_update: 更新的预警数据
         session: 数据库会话依赖
+        current_user: 当前认证用户
 
     Returns:
         更新后的预警信息对象
@@ -117,7 +140,7 @@ def update_alert(
     session.add(alert)
     session.commit()
     session.refresh(alert)
-    logger.info(f"Updated alert: {alert!r}")
+    logger.info(f"User {current_user.username} updated alert: {alert!r}")
     return alert
 
 
@@ -126,6 +149,7 @@ def partial_update_alert(
     alert_id: int,
     alert_update: Alert,
     session: SessionDep,
+    current_user: CurrentUser,
 ) -> Alert:
     """部分更新预警信息。
 
@@ -133,6 +157,7 @@ def partial_update_alert(
         alert_id: 预警信息ID
         alert_update: 部分更新的预警数据
         session: 数据库会话依赖
+        current_user: 当前认证用户
 
     Returns:
         更新后的预警信息对象
@@ -149,17 +174,22 @@ def partial_update_alert(
     session.add(alert)
     session.commit()
     session.refresh(alert)
-    logger.info(f"Partially updated alert: {alert!r}")
+    logger.info(f"User {current_user.username} partially updated alert: {alert!r}")
     return alert
 
 
 @router.delete("/{alert_id}", status_code=status.HTTP_204_NO_CONTENT)
-def delete_alert(alert_id: int, session: SessionDep) -> None:
+def delete_alert(
+    alert_id: int,
+    session: SessionDep,
+    current_user: CurrentUser,
+) -> None:
     """删除预警信息。
 
     Args:
         alert_id: 预警信息ID
         session: 数据库会话依赖
+        current_user: 当前认证用户
 
     Raises:
         HTTPException: 预警信息不存在时返回404
@@ -170,4 +200,4 @@ def delete_alert(alert_id: int, session: SessionDep) -> None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=ALERT_NOT_FOUND)
     session.delete(alert)
     session.commit()
-    logger.info(f"Deleted alert: id={alert_id}")
+    logger.info(f"User {current_user.username} deleted alert: id={alert_id}")

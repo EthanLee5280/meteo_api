@@ -1,7 +1,61 @@
 from datetime import datetime, timezone
+from typing import Optional
 
-from pydantic import field_validator
+from pydantic import field_validator, EmailStr
 from sqlmodel import SQLModel, Field
+
+
+class User(SQLModel, table=True):
+    """用户数据模型。
+
+    存储用户账户信息，包括登录凭据和个人资料。
+
+    Attributes:
+        id: 主键ID
+        username: 用户名，唯一标识
+        password_hash: 密码哈希值（非明文）
+        email: 电子邮箱地址
+        full_name: 用户全名
+        disabled: 账户是否禁用
+        created_at: 账户创建时间
+        updated_at: 最后更新时间
+    """
+
+    __tablename__ = "users"
+
+    id: Optional[int] = Field(default=None, primary_key=True)
+    username: str = Field(max_length=50, index=True, unique=True)
+    password_hash: str = Field(max_length=255)
+    email: EmailStr = Field(max_length=100, index=True)
+    full_name: str = Field(max_length=100)
+    disabled: bool = Field(default=False)
+    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    updated_at: Optional[datetime] = Field(default=None)
+
+    @field_validator("username")
+    @classmethod
+    def validate_username(cls, v: str) -> str:
+        """验证用户名格式。"""
+        if len(v) < 3:
+            raise ValueError("用户名至少需要3个字符")
+        if not v.isalnum():
+            raise ValueError("用户名只能包含字母和数字")
+        return v.lower()
+
+    @field_validator("full_name")
+    @classmethod
+    def validate_full_name(cls, v: str) -> str:
+        """验证全名格式。"""
+        if not v.strip():
+            raise ValueError("全名不能为空")
+        return v.strip()
+
+    def __repr__(self) -> str:
+        """返回对象的字符串表示。"""
+        return (
+            f"User(id={self.id}, username={self.username!r}, "
+            f"email={self.email!r}, disabled={self.disabled})"
+        )
 
 
 class Alert(SQLModel, table=True):

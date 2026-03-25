@@ -28,5 +28,22 @@ class Settings(BaseSettings):
         pattern=r"^sqlite:///.*$",
     )
 
+    secret_key: str = Field(
+        default="35c90dc5b8c019303926cde11205f2af29ff4a96b5071bf32f2a629c1a5706d3",
+        description="应用密钥，用于加密敏感数据",
+        min_length=64,
+        max_length=64,
+    )
+
+    algorithm: str = Field(
+        default="HS256",
+        description="加密算法，默认HS256",
+    )
+
+    access_token_expire_minutes: int = Field(
+        default=30,
+        description="访问令牌过期时间，默认30分钟",
+    )
+
 
 settings = Settings()
